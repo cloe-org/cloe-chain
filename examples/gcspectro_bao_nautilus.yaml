@@ -1,0 +1,75 @@
+# Example of config yaml file for a GCspectro run including only BAO
+# information, sampled with nautilus.
+
+output:
+  # Path to the directory where the chain will be written, relative to the
+  # working directory. If it doesn't exist, it will be created.
+  directory: chains
+  # Root name of the chain file to write in the output directory.
+  name:      test_gcspectro_bao
+
+probe:
+  # Likelihood class to build.
+  # Available options:
+  # - GCspectro_Pls
+  # - GCspectro_BAO
+  # - GCspectro_Pls_BAO
+  kind:       GCspectro_BAO
+  # Background class from cloelib.
+  # Available options:
+  # - CAMB
+  background: CAMB
+
+data:
+  # Effective redshifts of the spectroscopic bins.
+  redshifts:      [1.0, 1.2, 1.4, 1.65]
+  # Path of the base directory containing the data files, relative to the
+  # directory containing this config yaml file.
+  base_directory: ../data
+  # Root name of the BAO alphas data vector. These must be written in the
+  # corresponding LE3 data model.
+  datavec_BAO:    "EUC_LE3_BAO_ALPHAS_Z{}.fits"
+  # Root name of the covariance matrix. This must be written in the
+  # corresponding LE3 data model.
+  covariance:     "EUC_LE3_BAO_COV_Z{}.fits"
+
+# Default values that are kept fixed for all samples. Any name also listed under
+# sampled_parameters is overridden per-sample. No bias/RSD nuisance parameters
+# here: BAO alphas depend only on background cosmology.
+fixed_parameters:
+  Omega_k0: 0.0
+  mnu:      0.0
+  N_mnu:    0
+  w0:       -1.0
+  wa:       0.0
+  gamma_MG: 0.545
+
+# Sampled parameters, with their prior distributions. Every parameter here is
+# a single scalar cosmological value shared across all redshift bins -- no
+# per-bin/AM options apply to this probe (see
+# EuclidLikelihood_GCspectro_BAO.get_theory_vector).
+sampled_parameters:
+  H0:    {dist: flat, min: 50.0, max: 90.0}
+  omch2: {dist: flat, min: 0.08, max: 0.16}
+  ombh2: {dist: norm, loc: 0.0219961, scale: 0.00038}
+  As:    {dist: flat, min: 1.05e-9, max: 2.95e-9}
+  ns:    {dist: norm, loc: 0.96, scale: 0.042}
+
+# Additional constraints on sampled parameters that are enforced during the run.
+# Any sampled point failing an enabled check is rejected outright (as -inf) before
+# the likelihood is even evaluated.
+constraints:
+  negative_w0_wa_sum: true
+
+sampler:
+  # Type of sampler.
+  # Available options:
+  # - nautilus
+  kind: nautilus
+  # Settings of the sampler and of the run. n_live is kept proportionate to
+  # the number of sampled dimensions (5 here) -- much higher than needed
+  # makes the initial live-point draw take far longer than necessary before
+  # any progress is shown.
+  settings:
+    n_live: 200
+    filepath: checkpoint_bao.hdf5

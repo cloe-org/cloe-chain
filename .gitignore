@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Test/tooling caches
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Editor/OS
+.vscode/
+.DS_Store
+
+# Run outputs (chains, checkpoints, saved configs)
+chains/
+*.hdf5
+*.npz

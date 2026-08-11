@@ -1,0 +1,19 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cloechain"
+version = "0.1.0"
+description = "YAML-driven configuration and sampler runner for cloelike likelihoods"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "pyyaml",
+    "numpy",
+    "scipy",
+    "nautilus-sampler",
+]
+
+[tool.pytest.ini_options]
+addopts = "--verbose"
