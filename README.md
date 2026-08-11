@@ -178,3 +178,9 @@ A run writes two files to `output.directory`, both named after
   doesn't pin any of these, and a different version of e.g. `cloelike`
   or `comet-emu` can change the physics for the same config. Still valid
   YAML, so it can be passed straight back to `--config` to reproduce the run.
+
+## Example output
+
+![Example posterior](example_posterior.png)
+
+Full-resolution [PDF version](example_posterior.pdf).

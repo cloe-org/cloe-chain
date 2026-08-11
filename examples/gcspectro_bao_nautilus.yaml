@@ -43,6 +43,8 @@ fixed_parameters:
   w0:       -1.0
   wa:       0.0
   gamma_MG: 0.545
+  ns:       0.96
+  As:       2.1e-9
 
 # Sampled parameters, with their prior distributions. Every parameter here is
 # a single scalar cosmological value shared across all redshift bins -- no
@@ -52,8 +54,6 @@ sampled_parameters:
   H0:    {dist: flat, min: 50.0, max: 90.0}
   omch2: {dist: flat, min: 0.08, max: 0.16}
   ombh2: {dist: norm, loc: 0.0219961, scale: 0.00038}
-  As:    {dist: flat, min: 1.05e-9, max: 2.95e-9}
-  ns:    {dist: norm, loc: 0.96, scale: 0.042}
 
 # Additional constraints on sampled parameters that are enforced during the run.
 # Any sampled point failing an enabled check is rejected outright (as -inf) before
@@ -67,7 +67,7 @@ sampler:
   # - nautilus
   kind: nautilus
   # Settings of the sampler and of the run. n_live is kept proportionate to
-  # the number of sampled dimensions (5 here) -- much higher than needed
+  # the number of sampled dimensions (3 here) -- much higher than needed
   # makes the initial live-point draw take far longer than necessary before
   # any progress is shown.
   settings:
