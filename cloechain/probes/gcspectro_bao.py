@@ -89,6 +89,7 @@ def build_likelihood(cfg: RunConfig) -> EuclidLikelihood_GCspectro_BAO:
         data=data,
         Background=Background,
         LinearPerturbations=LinearPerturbations,
+        num_mocks=cfg.data.num_mocks,
     )
 
 

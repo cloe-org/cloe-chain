@@ -10,7 +10,16 @@ PROBES: dict[str, str] = {
     "GCspectro_Pls": "cloechain.probes.gcspectro_pls",
     "GCspectro_BAO": "cloechain.probes.gcspectro_bao",
     "GCspectro_Pls_BAO": "cloechain.probes.gcspectro_pls_bao",
+    "WL": "cloechain.probes.photo_cls",
+    "GCph": "cloechain.probes.photo_cls",
+    "GGL": "cloechain.probes.photo_cls",
+    "2x2pt": "cloechain.probes.photo_cls",
+    "3x2pt": "cloechain.probes.photo_cls",
 }
+
+# Probes whose config uses the photometric `data` layout (n(z), angular power
+# spectra, ...) instead of the spectroscopic one (redshifts, multipoles, ...).
+PHOTO_PROBES = frozenset({"WL", "GCph", "GGL", "2x2pt", "3x2pt"})
 
 SAMPLERS: dict[str, str] = {
     "nautilus": "cloechain.samplers.nautilus_runner",
@@ -50,15 +59,27 @@ BACKGROUNDS: dict[str, str] = {
 
 PERTURBATIONS: dict[str, str] = {
     "CAMB": "cloelib.cosmology.camb_cosmology:CAMBLinearPerturbations",
+    "HMcode2020Emu": "cloelib.cosmology.HMcode2020Emu_cosmology:HMemuLinearPerturbations",
+}
+
+NONLINEAR_PERTURBATIONS: dict[str, str] = {
+    "CAMB": "cloelib.cosmology.camb_cosmology:CAMBNonLinearPerturbations",
+    "HMcode2020Emu": "cloelib.cosmology.HMcode2020Emu_cosmology:HMemuNonLinearPerturbations",
+    "EE2": "cloelib.cosmology.EE2_cosmology:EE2NonLinearPerturbations",
+}
+
+BARYON_BOOSTS: dict[str, str] = {
+    "HMcode2020": "cloelib.cosmology.HMcode2020Emu_cosmology:HMcode2020BaryonBoostMixin",
+    "FLAMINGO": "cloelib.cosmology.FlamingoBaryonResponseEmulator_cosmology:FlamingoBaryonBoostMixin",
 }
 
 SPECTRO_POWERS: dict[str, dict[str, str]] = {
     "COMET": {
-        "EFT": "cloelib.observables.CometEFT_spectro:CometEFT_SpectroPower",
-        "VDG": "cloelib.observables.CometVDG_spectro:CometVDG_SpectroPower",
+        "EFT": "cloelib.observables.spectro.CometEFT_spectro:CometEFT_SpectroPower",
+        "VDG": "cloelib.observables.spectro.CometVDG_spectro:CometVDG_SpectroPower",
     },
     "PBJ": {
-        "EFT": "cloelib.observables.PBJ_spectro:PBJSpectroPower",
+        "EFT": "cloelib.observables.spectro.PBJ_spectro:PBJSpectroPower",
     },
 }
 
@@ -128,8 +149,9 @@ def load_perturbations(name: str):
     Parameters
     ----------
     name: str
-        Linear perturbationsname, i.e. the config's ``probe.background`` (same to background
-        as they are tied together).
+        Linear perturbations name, i.e. the config's ``probe.background`` for
+        the spectroscopic probes (same as the background, as they are tied
+        together) or ``probe.linear_perturbations`` for the photometric ones.
 
     Returns
     -------
@@ -138,10 +160,45 @@ def load_perturbations(name: str):
     """
     if name not in PERTURBATIONS:
         raise KeyError(
-            f"Unknown background '{name}'. Registered backgrounds with a "
-            f"Perturbations class: {sorted(PERTURBATIONS)}"
+            f"Unknown linear perturbations '{name}'. Registered linear "
+            f"perturbations: {sorted(PERTURBATIONS)}"
         )
     return load_from_path(PERTURBATIONS[name])
+
+
+def load_nonlinear_perturbations(name: str, baryon_boost: str | None = None):
+    """Return the nonlinear-perturbations class associated to the requested
+    name, optionally with a baryonic boost attached on top of it.
+
+    Parameters
+    ----------
+    name: str
+        Nonlinear perturbations name, i.e. the config's
+        ``probe.nonlinear_perturbations``.
+    baryon_boost: str or None
+        Baryonic boost name, i.e. the config's ``probe.baryon_boost``, or
+        ``None`` for no boost.
+
+    Returns
+    -------
+    perturbations: type
+        Type of NonLinearPerturbations class.
+    """
+    if name not in NONLINEAR_PERTURBATIONS:
+        raise KeyError(
+            f"Unknown nonlinear perturbations '{name}'. Registered nonlinear "
+            f"perturbations: {sorted(NONLINEAR_PERTURBATIONS)}"
+        )
+    NonLinearPerturbations = load_from_path(NONLINEAR_PERTURBATIONS[name])
+    if baryon_boost is None:
+        return NonLinearPerturbations
+    if baryon_boost not in BARYON_BOOSTS:
+        raise KeyError(
+            f"Unknown baryon_boost '{baryon_boost}'. Registered baryon boosts: "
+            f"{sorted(BARYON_BOOSTS)}"
+        )
+    with_baryon_boost = load_from_path("cloelib.cosmology.cosmology:with_baryon_boost")
+    return with_baryon_boost(NonLinearPerturbations, load_from_path(BARYON_BOOSTS[baryon_boost]))
 
 
 def load_spectro_power(code: str, rsd_model: str | None = None):

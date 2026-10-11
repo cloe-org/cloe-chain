@@ -1,0 +1,174 @@
+# Example of config yaml file for a photometric 3x2pt run (cosmic shear,
+# galaxy-galaxy lensing and photometric galaxy clustering angular power
+# spectra), with TATT intrinsic alignments, one-loop nonlinear galaxy bias and
+# HMcode2020 baryonic feedback, sampled with nautilus. Same setup as
+# playground/scripts/sampling/nautilus_example_3x2pt.py.
+
+output:
+  # Path to the directory where the chain will be written, relative to the
+  # working directory. If it doesn't exist, it will be created.
+  directory: chains
+  # Root name of the chain file to write in the output directory.
+  name:      test_3x2pt_TATT_nonlinear_HMcode
+
+probe:
+  # Likelihood class to build.
+  # Available options:
+  # - GCspectro_Pls, GCspectro_BAO, GCspectro_Pls_BAO (spectroscopic)
+  # - WL, GCph, GGL, 2x2pt (GGL + GCph), 3x2pt (WL + GGL + GCph) (photometric)
+  kind:       3x2pt
+  # Background class from cloelib.
+  # Available options:
+  # - CAMB
+  background: CAMB
+  # Linear perturbations class from cloelib (defaults to `background`).
+  # Available options:
+  # - CAMB
+  # - HMcode2020Emu
+  linear_perturbations:    HMcode2020Emu
+  # Nonlinear perturbations class from cloelib.
+  # Available options:
+  # - CAMB (Halofit/HMcode, see settings.nonlinear_kwargs)
+  # - HMcode2020Emu
+  # - EE2 (no baryonic feedback)
+  nonlinear_perturbations: HMcode2020Emu
+  # Baryonic boost applied on top of the nonlinear perturbations, if any.
+  # Available options:
+  # - null (log10TAGN, if sampled, goes straight to the nonlinear class)
+  # - HMcode2020 (reads log10TAGN)
+  # - FLAMINGO (reads fgas_sigma, Mstar_sigma, jet_fraction)
+  baryon_boost: null
+  # Whether the theory is convolved with the mixing matrices (coupled) or not
+  # (decoupled).
+  mode: coupled
+  # Theory settings, passed as they are to the cloelike likelihood.
+  settings:
+    # Intrinsic alignment model: NLA, TATT or null.
+    ia_model:          TATT
+    # Galaxy bias model: poly, per_bin, per_bin_int or nonlinear.
+    galaxy_bias_model: nonlinear
+    # Redshift-space distortions in GCph (not available for nonlinear bias).
+    include_rsd:       false
+    # Sampled parameters passed to the nonlinear perturbations class.
+    nonlinear_param_keys: [log10TAGN]
+
+data:
+  # Path of the base directory containing the data files, relative to the
+  # directory containing this config yaml file.
+  base_directory: ../data
+  # n(z) of the tomographic bins, shared by positions and shear. Use
+  # nz_positions and nz_shear instead for two different samples.
+  nz:             nz_example.fits
+  # Redshift grid the n(z) are resampled on.
+  z_grid:         {min: 1.0e-4, max: 3.0, num: 100}
+  # Angular power spectra, in the LE3 data model.
+  cells:          synthetic_coupled_cells.fits
+  # Mixing matrices, in the LE3 data model. Required for mode: coupled.
+  mixing:         mixmats_example.fits
+  # Covariance matrix (.npz or .npy), with blocks ordered WL, GGL, GCph. It can
+  # cover the full 3x2pt data vector even for WL, GCph, GGL or 2x2pt runs: the
+  # blocks of the probe are then extracted from it.
+  covariance:     covmat_2D.npz
+  # Array to read from the .npz file.
+  covariance_key: Gauss
+  # Replace the data vector with the noise-free theory at fixed_parameters,
+  # so that the posterior is centred on them. The synthetic data file was
+  # generated with one fixed model, so use this when fitting another one.
+  noise_free_mock: true
+
+# Multipole range of each block. Single spectra can be given their own range
+# under overrides, keyed as "<tracer>-<tracer>-<bin>-<bin>".
+scale_cuts:
+  WL:   [10, 1500]
+  GGL:  [10, 750]
+  GCph: [10, 750]
+  # overrides:
+  #   POS-SHE-1-1: [10, 300]
+
+# Default values that are kept fixed for all samples, and fiducial point of
+# noise_free_mock. Any name also listed under sampled_parameters is overridden
+# per-sample. A name with {i} is expanded to every tomographic bin, with the
+# indexing cloelike uses for that parameter (1-based for dz_shear_{i},
+# 0-based for b1_photo_nl_bin{i}); an explicit name, e.g. dz_shear_3,
+# overrides the template for that bin.
+fixed_parameters:
+  H0:         70.0
+  Omega_cdm0: 0.25
+  Omega_b0:   0.05
+  ns:         0.96
+  As:         2.0e-9
+  w0:         -1.0
+  wa:         0.0
+  Omega_k0:   0.0
+  mnu:        0.06
+  N_mnu:      1
+  gamma_MG:   0.545
+  alpha_s:    0.0
+  # Intrinsic alignments (TATT)
+  AIA:        1.72
+  CIA:        0.0134
+  EtaIA:      -0.41
+  A2IA:       0.0
+  Eta2IA:     0.0
+  bTA:        0.0
+  z0IA:       0.62
+  # Baryonic feedback
+  log10TAGN:  7.8
+  # Galaxy bias (nonlinear). bs2, b3nl and bk2 are left out, which drops them
+  # from the expansion.
+  b1_photo_nl_bin{i}: 1.0
+  b2_photo_nl_bin{i}: 0.0
+  # Magnification bias, photo-z shifts and widths, multiplicative bias
+  magnification_bias_{i}:  0.0
+  dz_pos_{i}:              0.0
+  width_pos_{i}:           1.0
+  multiplicative_bias_{i}: 0.0
+  dz_shear_{i}:            0.0
+  width_shear_{i}:         1.0
+
+# Sampled parameters, with their prior distributions (flat, or any
+# scipy.stats distribution, e.g. norm). The {i} templates work as in
+# fixed_parameters.
+sampled_parameters:
+  # Cosmology. The BBN-like ombh2 prior is centred on the fiducial
+  # Omega_b0 h^2 = 0.0245.
+  ombh2: {dist: norm, loc: 0.0245, scale: 0.00038}
+  omch2: {dist: flat, min: 0.11, max: 0.13}
+  logA:  {dist: flat, min: 2.833, max: 3.219}
+  ns:    {dist: flat, min: 0.6, max: 1.2}
+  H0:    {dist: flat, min: 50.0, max: 90.0}
+  # Intrinsic alignments
+  AIA:   {dist: flat, min: -5.0, max: 5.0}
+  EtaIA: {dist: flat, min: -5.0, max: 5.0}
+  A2IA:  {dist: flat, min: -5.0, max: 5.0}
+  bTA:   {dist: flat, min: -5.0, max: 5.0}
+  # Galaxy bias
+  b1_photo_nl_bin{i}: {dist: flat, min: 0.0, max: 3.0}
+  b2_photo_nl_bin{i}: {dist: flat, min: -5.0, max: 5.0}
+  # Baryonic feedback
+  log10TAGN: {dist: flat, min: 7.6, max: 8.3}
+  # Magnification bias
+  magnification_bias_{i}: {dist: flat, min: -2.0, max: 2.0}
+  # Photo-z shifts and multiplicative bias
+  dz_pos_{i}:              {dist: norm, loc: 0.0, scale: 0.01}
+  multiplicative_bias_{i}: {dist: norm, loc: 0.0, scale: 0.01}
+  dz_shear_{i}:            {dist: norm, loc: 0.0, scale: 0.01}
+
+# omch2, ombh2 and logA are converted to Omega_cdm0, Omega_b0 and As by the
+# derived-parameter relations, which are enabled automatically.
+
+# Additional constraints on sampled parameters that are enforced during the run.
+# Any sampled point failing an enabled check is rejected outright (as -inf) before
+# the likelihood is even evaluated.
+constraints:
+  negative_w0_wa_sum: true
+
+sampler:
+  # Type of sampler.
+  # Available options:
+  # - nautilus
+  kind: nautilus
+  # Settings of the sampler and of the run.
+  settings:
+    n_live: 4000
+    filepath: checkpoint_3x2pt.hdf5
