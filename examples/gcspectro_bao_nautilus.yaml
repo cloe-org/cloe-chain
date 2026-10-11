@@ -14,6 +14,7 @@ probe:
   # - GCspectro_Pls
   # - GCspectro_BAO
   # - GCspectro_Pls_BAO
+  # - WL, GCph, GGL, 2x2pt, 3x2pt (photometric, see 3x2pt_nautilus.yaml)
   kind:       GCspectro_BAO
   # Background class from cloelib.
   # Available options:
@@ -32,6 +33,10 @@ data:
   # Root name of the covariance matrix. This must be written in the
   # corresponding LE3 data model.
   covariance:     "EUC_LE3_BAO_COV_Z{}.fits"
+  # Number of mocks used to estimate the covariance, only for a numerical
+  # (sample) covariance: it applies the Hartlap correction to its inverse.
+  # Leave it out for an analytical covariance.
+  # num_mocks: 1000
 
 # Default values that are kept fixed for all samples. Any name also listed under
 # sampled_parameters is overridden per-sample. No bias/RSD nuisance parameters
@@ -43,6 +48,7 @@ fixed_parameters:
   w0:       -1.0
   wa:       0.0
   gamma_MG: 0.545
+  alpha_s:  0.0
   ns:       0.96
   As:       2.1e-9
 
