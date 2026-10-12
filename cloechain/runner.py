@@ -8,6 +8,7 @@ from cloechain.chain import Chain
 from cloechain.config import RunConfig
 from cloechain.parameters import build_parameter_dict_for_loglike
 from cloechain.priors import build_priors
+from cloechain.templates import expand_bin_templates
 from cloechain.versions import write_config_with_versions
 from cloechain.loader import load_constraint, load_derived_parameter, load_probe, load_sampler
 
@@ -48,7 +49,19 @@ def run(config: RunConfig) -> Chain:
     obs_labels = probe.obs_labels(config)
     vector_parameter_names = probe.vector_parameter_names(likelihood)
 
-    priors = build_priors(config.sampled_parameters, obs_labels, vector_parameter_names)
+    fixed_parameters = config.fixed_parameters
+    sampled_parameters = config.sampled_parameters
+    # Probes with one scalar parameter per bin expand the '{i}' templates.
+    if hasattr(probe, "parameter_names"):
+        names = probe.parameter_names(likelihood)
+        fixed_parameters = expand_bin_templates(fixed_parameters, names, "fixed_parameters")
+        sampled_parameters = expand_bin_templates(
+            sampled_parameters, names, "sampled_parameters"
+        )
+    if getattr(config.data, "noise_free_mock", False):
+        probe.use_noise_free_mock(likelihood, fixed_parameters)
+
+    priors = build_priors(sampled_parameters, obs_labels, vector_parameter_names)
 
     active_derived_parameters = [
         load_derived_parameter(name)
@@ -61,7 +74,7 @@ def run(config: RunConfig) -> Chain:
 
     def loglike_fn(flat_sample: dict[str, float]) -> float:
         parameters = build_parameter_dict_for_loglike(
-            flat_sample, priors.layout, config.fixed_parameters
+            flat_sample, priors.layout, fixed_parameters
         )
         for derive in active_derived_parameters:
             derive(parameters)

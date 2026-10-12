@@ -8,7 +8,7 @@ from typing import Any, Optional
 
 import yaml
 
-from cloechain.loader import DERIVED_PARAMETERS
+from cloechain.loader import DERIVED_PARAMETERS, PHOTO_PROBES
 
 REQUIRED_SECTIONS = (
     "probe", "data", "fixed_parameters", "sampled_parameters", "sampler", "output",
@@ -75,6 +75,75 @@ def _parse_scale_cuts(scale_cuts: dict[float, Any], data: DataConfig) -> dict[st
     _check_redshift_keys_match(set(scale_cuts), data, "scale_cuts")
     label = dict(zip(data.redshifts, data.labels))
     return {label[z]: bounds for z, bounds in scale_cuts.items()}
+
+
+# Blocks of the photometric data vector, as named in the ``scale_cuts`` section,
+# mapped to the (tracer, tracer) prefix of the corresponding data keys.
+PHOTO_BLOCKS = {
+    "WL": ("SHE", "SHE"),
+    "GGL": ("POS", "SHE"),
+    "GCph": ("POS", "POS"),
+}
+
+
+def _parse_photo_scale_cuts(scale_cuts: dict[str, Any]) -> dict[str, Any]:
+    """Validate the photometric ``scale_cuts`` section and parse the keys of
+    its per-pair ``overrides``.
+
+    Parameters
+    ----------
+    scale_cuts: dict[str, Any]
+        The raw ``scale_cuts`` section of a config yaml file, with one
+        multipole range per block (``WL``, ``GGL``, ``GCph``) and optional
+        per-pair ranges under ``overrides``, keyed as ``"POS-SHE-1-3"``.
+
+    Returns
+    -------
+    scale_cuts: dict[str, Any]
+        Same section, with the ``overrides`` keys turned into data keys,
+        e.g. ``("POS", "SHE", 1, 3)``.
+    """
+    unexpected = sorted(set(scale_cuts) - set(PHOTO_BLOCKS) - {"overrides"})
+    if unexpected:
+        raise ValueError(
+            f"Unexpected 'scale_cuts' key(s) {unexpected}; expected any of "
+            f"{sorted(PHOTO_BLOCKS)} and 'overrides'"
+        )
+    parsed = {block: list(bounds) for block, bounds in scale_cuts.items() if block != "overrides"}
+    overrides = {}
+    for pair, bounds in scale_cuts.get("overrides", {}).items():
+        parts = str(pair).split("-")
+        if len(parts) != 4 or tuple(parts[:2]) not in PHOTO_BLOCKS.values():
+            raise ValueError(
+                f"Invalid 'scale_cuts.overrides' key '{pair}'; expected e.g. "
+                "'SHE-SHE-1-2', 'POS-SHE-1-3' or 'POS-POS-2-2'"
+            )
+        overrides[(parts[0], parts[1], int(parts[2]), int(parts[3]))] = list(bounds)
+    parsed["overrides"] = overrides
+    return parsed
+
+
+def _check_photo_sampled_parameters(sampled_parameters: dict[str, Any]) -> None:
+    """Raise an error for sampled-parameter specs the photometric probes do
+    not support: per-redshift specs and analytical marginalisation.
+
+    Parameters
+    ----------
+    sampled_parameters: dict[str, Any]
+        The raw ``sampled_parameters`` section of a config yaml file.
+    """
+    for name, spec in sampled_parameters.items():
+        if not isinstance(spec, dict) or "dist" not in spec:
+            raise ValueError(
+                f"'sampled_parameters.{name}' must be a single spec with a 'dist' "
+                "key for photometric probes; use a '{i}' template (e.g. "
+                "'dz_shear_{i}') for per-bin parameters"
+            )
+        if spec["dist"] == "AM":
+            raise ValueError(
+                f"'sampled_parameters.{name}': analytical marginalisation "
+                "(dist: AM) is not available for photometric probes"
+            )
 
 
 def _normalize_sampled_parameters(sampled_parameters: dict[str, Any], data: DataConfig) -> dict[str, Any]:
@@ -158,6 +227,9 @@ class DataConfig:
     mixing_template: str or None
         Mixing-matrix filename template, resolved to an absolute path, or
         ``None`` if not given in the config.
+    num_mocks: int or None
+        Number of mocks used to estimate a numerical covariance, which
+        triggers the Hartlap correction, or ``None`` for an analytical one.
     """
 
     redshifts: list[float]
@@ -167,6 +239,7 @@ class DataConfig:
     datavec_BAO_template: Optional[str]
     covariance_template: str
     mixing_template: Optional[str]
+    num_mocks: Optional[int] = None
 
     @classmethod
     def from_dict(cls, data: dict, config_dir: Path) -> DataConfig:
@@ -204,6 +277,87 @@ class DataConfig:
             ),
             covariance_template=str(base_directory / data["covariance"]),
             mixing_template=str(base_directory / data["mixing"]) if "mixing" in data else None,
+            num_mocks=data.get("num_mocks"),
+        )
+
+
+@dataclass
+class PhotoDataConfig:
+    """Container for the data setup of the photometric probes.
+
+    Attributes
+    ----------
+    nz_positions: str
+        Path of the n(z) file of the positions (lens) sample.
+    nz_shear: str
+        Path of the n(z) file of the shear (source) sample.
+    z_grid: dict[str, float]
+        ``min``, ``max`` and ``num`` of the uniform redshift grid the n(z)
+        are resampled on, which is also the grid of the theory calculation.
+    cells: str
+        Path of the angular power spectra file.
+    covariance: str
+        Path of the covariance file (``.npz`` or ``.npy``). It covers either
+        exactly the blocks of the probe, or the full 3x2pt data vector, in
+        which case the blocks of the probe are extracted from it.
+    covariance_key: str or None
+        Array to read from a ``.npz`` covariance file with several arrays.
+    mixing: str or None
+        Path of the mixing matrices file, required for ``probe.mode:
+        coupled``.
+    noise_free_mock: bool
+        Whether to replace the data vector with the theory at
+        ``fixed_parameters``.
+    """
+
+    nz_positions: str
+    nz_shear: str
+    z_grid: dict[str, float]
+    cells: str
+    covariance: str
+    covariance_key: Optional[str] = None
+    mixing: Optional[str] = None
+    noise_free_mock: bool = False
+
+    @classmethod
+    def from_dict(cls, data: dict, config_dir: Path) -> PhotoDataConfig:
+        """Build a `PhotoDataConfig` object from the raw ``data`` section of a
+        config yaml file.
+
+        Parameters
+        ----------
+        data: dict
+            The ``data`` section parsed from a config yaml file.
+        config_dir: Path
+            Directory the config file lives in.
+
+        Returns
+        -------
+        data_config: PhotoDataConfig
+        """
+        for key in ("cells", "covariance"):
+            if key not in data:
+                raise ValueError(f"'data' section is missing required key '{key}'")
+        nz_positions = data.get("nz_positions", data.get("nz"))
+        nz_shear = data.get("nz_shear", data.get("nz"))
+        if nz_positions is None or nz_shear is None:
+            raise ValueError(
+                "'data' section needs 'nz' (shared by positions and shear) or "
+                "both 'nz_positions' and 'nz_shear'"
+            )
+
+        base_directory = config_dir / data.get("base_directory", ".")
+        z_grid = {"min": 1e-4, "max": 3.0, "num": 100, **data.get("z_grid", {})}
+
+        return cls(
+            nz_positions=str(base_directory / nz_positions),
+            nz_shear=str(base_directory / nz_shear),
+            z_grid=z_grid,
+            cells=str(base_directory / data["cells"]),
+            covariance=str(base_directory / data["covariance"]),
+            covariance_key=data.get("covariance_key"),
+            mixing=str(base_directory / data["mixing"]) if "mixing" in data else None,
+            noise_free_mock=bool(data.get("noise_free_mock", False)),
         )
 
 
@@ -216,14 +370,17 @@ class RunConfig:
     ----------
     probe: dict[str, Any]
         The raw ``probe`` section of the config yaml file.
-    data: DataConfig
-        The resolved ``data`` section of the config yaml file.
+    data: DataConfig or PhotoDataConfig
+        The resolved ``data`` section of the config yaml file, in the
+        spectroscopic or photometric layout depending on ``probe.kind``.
     scale_cuts: dict[str, Any]
-        The ``scale_cuts`` section of the config yaml file, re-keyed from
-        redshift value to redshift label.
+        The ``scale_cuts`` section of the config yaml file: re-keyed from
+        redshift value to redshift label for the spectroscopic probes, or
+        with parsed ``overrides`` keys for the photometric ones.
     sampled_parameters: dict[str, Any]
         The ``sampled_parameters`` section of the config yaml file, processed
-        to include per-bin entries.
+        to include per-bin entries (spectroscopic probes). Photometric
+        ``{i}`` templates are expanded later, once the likelihood is built.
     fixed_parameters: dict[str, Any]
         The raw ``fixed_parameters`` section of the config yaml file.
     sampler: dict[str, Any]
@@ -240,7 +397,7 @@ class RunConfig:
     """
 
     probe: dict[str, Any]
-    data: DataConfig
+    data: DataConfig | PhotoDataConfig
     scale_cuts: dict[str, Any]
     sampled_parameters: dict[str, Any]
     fixed_parameters: dict[str, Any]
@@ -279,13 +436,26 @@ class RunConfig:
         if "kind" not in raw["sampler"]:
             raise ValueError("'sampler' section is missing required key 'kind'")
 
-        data = DataConfig.from_dict(raw["data"], config_dir=config_path.parent)
-        sampled_parameters = _normalize_sampled_parameters(raw["sampled_parameters"], data)
+        if raw["probe"]["kind"] in PHOTO_PROBES:
+            data = PhotoDataConfig.from_dict(raw["data"], config_dir=config_path.parent)
+            _check_photo_sampled_parameters(raw["sampled_parameters"])
+            sampled_parameters = raw["sampled_parameters"]
+            if "scale_cuts" not in raw:
+                raise ValueError(
+                    f"'scale_cuts' is required for probe '{raw['probe']['kind']}'"
+                )
+            scale_cuts = _parse_photo_scale_cuts(raw["scale_cuts"])
+        else:
+            data = DataConfig.from_dict(raw["data"], config_dir=config_path.parent)
+            sampled_parameters = _normalize_sampled_parameters(
+                raw["sampled_parameters"], data
+            )
+            scale_cuts = (
+                _parse_scale_cuts(raw["scale_cuts"], data) if "scale_cuts" in raw else {}
+            )
         derived_parameters = _auto_enable_derived_parameters(
             raw.get("derived_parameters", {}), raw["fixed_parameters"], sampled_parameters
         )
-
-        scale_cuts = _parse_scale_cuts(raw["scale_cuts"], data) if "scale_cuts" in raw else {}
 
         return cls(
             probe=raw["probe"],

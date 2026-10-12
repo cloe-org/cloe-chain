@@ -1,0 +1,74 @@
+# Example of config yaml file for a photometric cosmic shear (WL) run, with
+# NLA intrinsic alignments and HMcode2020 baryonic feedback, sampled with
+# nautilus. See 3x2pt_nautilus.yaml for the full description of every option.
+
+output:
+  directory: chains
+  name:      test_wl_NLA_HMcode
+
+probe:
+  kind:       WL
+  background: CAMB
+  linear_perturbations:    HMcode2020Emu
+  nonlinear_perturbations: HMcode2020Emu
+  baryon_boost: null
+  mode: coupled
+  settings:
+    ia_model: NLA
+    nonlinear_param_keys: [log10TAGN]
+
+data:
+  base_directory: ../data
+  nz:             nz_example.fits
+  z_grid:         {min: 1.0e-4, max: 3.0, num: 100}
+  cells:          synthetic_coupled_cells.fits
+  mixing:         mixmats_example.fits
+  # The full 3x2pt covariance: its WL block is extracted automatically.
+  covariance:     covmat_2D.npz
+  covariance_key: Gauss
+  noise_free_mock: true
+
+scale_cuts:
+  WL: [10, 1500]
+
+fixed_parameters:
+  H0:         70.0
+  Omega_cdm0: 0.25
+  Omega_b0:   0.05
+  ns:         0.96
+  As:         2.0e-9
+  w0:         -1.0
+  wa:         0.0
+  Omega_k0:   0.0
+  mnu:        0.06
+  N_mnu:      1
+  gamma_MG:   0.545
+  alpha_s:    0.0
+  AIA:        1.72
+  CIA:        0.0134
+  EtaIA:      -0.41
+  log10TAGN:  7.8
+  multiplicative_bias_{i}: 0.0
+  dz_shear_{i}:            0.0
+  width_shear_{i}:         1.0
+
+sampled_parameters:
+  ombh2: {dist: norm, loc: 0.0245, scale: 0.00038}
+  omch2: {dist: flat, min: 0.11, max: 0.13}
+  logA:  {dist: flat, min: 2.833, max: 3.219}
+  ns:    {dist: flat, min: 0.6, max: 1.2}
+  H0:    {dist: flat, min: 50.0, max: 90.0}
+  AIA:   {dist: flat, min: -5.0, max: 5.0}
+  EtaIA: {dist: flat, min: -5.0, max: 5.0}
+  log10TAGN: {dist: flat, min: 7.6, max: 8.3}
+  multiplicative_bias_{i}: {dist: norm, loc: 0.0, scale: 0.01}
+  dz_shear_{i}:            {dist: norm, loc: 0.0, scale: 0.01}
+
+constraints:
+  negative_w0_wa_sum: true
+
+sampler:
+  kind: nautilus
+  settings:
+    n_live: 2000
+    filepath: checkpoint_wl.hdf5

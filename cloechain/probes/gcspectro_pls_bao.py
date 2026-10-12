@@ -147,4 +147,5 @@ def build_likelihood(cfg: RunConfig) -> EuclidLikelihood_GCspectro_Pls_BAO:
         SpectroPower=SpectroPower,
         Perturbations=Perturbations,
         AM_priors=AM_priors,
+        num_mocks=cfg.data.num_mocks,
     )

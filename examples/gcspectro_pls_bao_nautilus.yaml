@@ -14,6 +14,7 @@ probe:
   # - GCspectro_Pls
   # - GCspectro_BAO
   # - GCspectro_Pls_BAO
+  # - WL, GCph, GGL, 2x2pt, 3x2pt (photometric, see 3x2pt_nautilus.yaml)
   kind:       GCspectro_Pls_BAO
   # Background class from cloelib.
   # Available options:
@@ -51,6 +52,10 @@ data:
   # Root name of the mixing matrix. This must be written in the
   # corresponding LE3 data model (h/Mpc units).
   mixing:         "mixmat_pk_GCspectro_identity_z{}.fits"
+  # Number of mocks used to estimate the covariance, only for a numerical
+  # (sample) covariance: it applies the Hartlap correction to its inverse.
+  # Leave it out for an analytical covariance.
+  # num_mocks: 1000
 
 # Scale cuts for the multipoles in h/Mpc units. These are converted internally
 # to 1/Mpc units using the fiducial H0 (read in the header of the data files).
@@ -70,6 +75,7 @@ fixed_parameters:
   w0:       -1.0
   wa:       0.0
   gamma_MG: 0.545
+  alpha_s:  0.0
   fout:    [0.0, 0.0, 0.0, 0.0]
   sigmaz:  [0.0, 0.0, 0.0, 0.0]
 
